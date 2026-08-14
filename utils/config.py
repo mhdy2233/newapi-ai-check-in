@@ -41,8 +41,8 @@ class ProviderConfig:
     login_path: str = "/login"
     status_path: str = "/api/status"
     auth_state_path: str = "api/oauth/state"
-    check_in_path: str | Callable[[str, str | int], str] | None = None
-    check_in_status: bool | CheckInStatusFunc = False  # 签到状态查询：True=标准检查，False=不检查，Callable=自定义函数
+    check_in_path: str | Callable[[str, str | int], str] | None = "/api/user/checkin"
+    check_in_status: bool | CheckInStatusFunc = True  # 签到状态查询：True=标准检查，False=不检查，Callable=自定义函数
     user_info_path: str = "/api/user/self"
     topup_path: str | None = "/api/user/topup"
     get_cdk: CdkGetterFunc | AsyncCdkGetterFunc | None = None
@@ -77,8 +77,9 @@ class ProviderConfig:
             login_path=data.get("login_path", "/login"),
             status_path=data.get("status_path", "/api/status"),
             auth_state_path=data.get("auth_state_path", "api/oauth/state"),
-            check_in_path=data.get("check_in_path"),
-            check_in_status=data.get("check_in_status", False),
+            # 自定义 provider 默认采用 New API 标准签到流程；显式传 null/false 仍可禁用。
+            check_in_path=data.get("check_in_path", "/api/user/checkin"),
+            check_in_status=data.get("check_in_status", True),
             user_info_path=data.get("user_info_path", "/api/user/self"),
             topup_path=data.get("topup_path", "/api/user/topup"),
             get_cdk=data.get("get_cdk"),  # 函数类型无法从 JSON 解析，需要代码中设置

@@ -1236,7 +1236,7 @@ class CheckIn:
                     updated_headers.update(oauth_browser_headers)
 
                 merged_cookies = {**bypass_cookies, **user_cookies}
-                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user)
+                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user, impersonate)
             elif success and "code" in result_data and "state" in result_data:
                 # 收到 OAuth code，通过 HTTP 调用回调接口获取 api_user
                 print(f"ℹ️ {self.account_name}: Received OAuth code, calling callback API")
@@ -1277,7 +1277,7 @@ class CheckIn:
                                     f"ℹ️ {self.account_name}: Extracted {len(user_cookies)} user cookies: {list(user_cookies.keys())}"
                                 )
                                 merged_cookies = {**bypass_cookies, **user_cookies}
-                                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user)
+                                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user, impersonate)
                             else:
                                 print(f"❌ {self.account_name}: No user ID in callback response")
                                 return False, {"error": "No user ID in OAuth callback response"}
@@ -1399,7 +1399,7 @@ class CheckIn:
                     updated_headers.update(oauth_browser_headers)
 
                 merged_cookies = {**bypass_cookies, **user_cookies}
-                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user)
+                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user, impersonate)
             elif success and "code" in result_data and "state" in result_data:
                 # 收到 OAuth code，通过 HTTP 调用回调接口获取 api_user
                 print(f"ℹ️ {self.account_name}: Received OAuth code, calling callback API")
@@ -1440,7 +1440,7 @@ class CheckIn:
                                     f"ℹ️ {self.account_name}: Extracted {len(user_cookies)} user cookies: {list(user_cookies.keys())}"
                                 )
                                 merged_cookies = {**bypass_cookies, **user_cookies}
-                                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user)
+                                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user, impersonate)
                             else:
                                 print(f"❌ {self.account_name}: No user ID in callback response")
                                 return False, {"error": "No user ID in OAuth callback response"}
@@ -1546,7 +1546,7 @@ class CheckIn:
             print(f"ℹ️ {self.account_name}: Extracted {len(user_cookies)} site login cookies: {list(user_cookies.keys())}")
 
             merged_cookies = {**bypass_cookies, **user_cookies}
-            return await self.check_in_with_cookies(merged_cookies, common_headers, api_user)
+            return await self.check_in_with_cookies(merged_cookies, common_headers, api_user, impersonate)
 
         except Exception as e:
             print(f"❌ {self.account_name}: Error occurred during site login process - {e}")
@@ -1820,7 +1820,7 @@ class CheckIn:
                     updated_headers.update(browser_headers)
 
                 impersonate = get_curl_cffi_impersonate(updated_headers.get("User-Agent", ""))
-                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user)
+                return await self.check_in_with_cookies(merged_cookies, updated_headers, api_user, impersonate)
 
             except Exception as e:
                 print(f"❌ {self.account_name}: Error occurred during site browser login process - {e}")
@@ -1925,7 +1925,6 @@ class CheckIn:
         linuxdo_accounts = self.account_config.linux_do  # 现在是 List[OAuthAccountConfig] 类型
         site_accounts = self.account_config.site
         results = []
-        authentication_succeeded = False
 
         # 尝试 cookies 认证
         if cookies_data:
@@ -1947,7 +1946,6 @@ class CheckIn:
                         if success:
                             print(f"✅ {self.account_name}: Cookies authentication successful")
                             results.append(("cookies", True, user_info))
-                            authentication_succeeded = True
                         else:
                             print(f"❌ {self.account_name}: Cookies authentication failed")
                             results.append(("cookies", False, user_info))
@@ -1956,7 +1954,7 @@ class CheckIn:
                 results.append(("cookies", False, {"error": str(e)}))
 
         # 尝试 system access token 认证
-        if system_access_token_data and not authentication_succeeded:
+        if system_access_token_data:
             print(f"\nℹ️ {self.account_name}: Trying system access token authentication")
             try:
                 api_user = self.account_config.api_user
@@ -1971,7 +1969,6 @@ class CheckIn:
                     if success:
                         print(f"✅ {self.account_name}: System access token authentication successful")
                         results.append(("system_access_token", True, user_info))
-                        authentication_succeeded = True
                     else:
                         print(f"❌ {self.account_name}: System access token authentication failed")
                         results.append(("system_access_token", False, user_info))
@@ -1980,7 +1977,7 @@ class CheckIn:
                 results.append(("system_access_token", False, {"error": str(e)}))
 
         # 尝试 GitHub 认证（支持多个账号）
-        if github_accounts and not authentication_succeeded:
+        if github_accounts:
             for idx, github_account in enumerate(github_accounts):
                 account_label = f"github[{idx}]" if len(github_accounts) > 1 else "github"
                 print(f"\nℹ️ {self.account_name}: Trying GitHub authentication ({mask_username(github_account.username)})")
@@ -1998,17 +1995,14 @@ class CheckIn:
                         if success:
                             print(f"✅ {self.account_name}: GitHub authentication successful ({mask_username(github_account.username)})")
                             results.append((account_label, True, user_info))
-                            authentication_succeeded = True
                         else:
                             print(f"❌ {self.account_name}: GitHub authentication failed ({mask_username(github_account.username)})")
                             results.append((account_label, False, user_info))
                 except Exception as e:
                     print(f"❌ {self.account_name}: GitHub authentication error ({mask_username(github_account.username)}): {e}")
                     results.append((account_label, False, {"error": str(e)}))
-                if authentication_succeeded:
-                    break
 
-        if site_accounts and not authentication_succeeded:
+        if site_accounts:
             for idx, site_account in enumerate(site_accounts):
                 account_label = f"site[{idx}]" if len(site_accounts) > 1 else "site"
                 print(f"\nℹ️ {self.account_name}: Trying site authentication ({mask_username(site_account.username)})")
@@ -2029,18 +2023,15 @@ class CheckIn:
                         if success:
                             print(f"✅ {self.account_name}: Site authentication successful ({mask_username(site_account.username)})")
                             results.append((account_label, True, user_info))
-                            authentication_succeeded = True
                         else:
                             print(f"❌ {self.account_name}: Site authentication failed ({mask_username(site_account.username)})")
                             results.append((account_label, False, user_info))
                 except Exception as e:
                     print(f"❌ {self.account_name}: Site authentication error ({mask_username(site_account.username)}): {e}")
                     results.append((account_label, False, {"error": str(e)}))
-                if authentication_succeeded:
-                    break
 
         # 尝试 Linux.do 认证（支持多个账号）
-        if linuxdo_accounts and not authentication_succeeded:
+        if linuxdo_accounts:
             for idx, linuxdo_account in enumerate(linuxdo_accounts):
                 account_label = f"linux.do[{idx}]" if len(linuxdo_accounts) > 1 else "linux.do"
                 print(f"\nℹ️ {self.account_name}: Trying Linux.do authentication ({mask_username(linuxdo_account.username)})")
@@ -2061,15 +2052,12 @@ class CheckIn:
                         if success:
                             print(f"✅ {self.account_name}: Linux.do authentication successful ({mask_username(linuxdo_account.username)})")
                             results.append((account_label, True, user_info))
-                            authentication_succeeded = True
                         else:
                             print(f"❌ {self.account_name}: Linux.do authentication failed ({mask_username(linuxdo_account.username)})")
                             results.append((account_label, False, user_info))
                 except Exception as e:
                     print(f"❌ {self.account_name}: Linux.do authentication error ({mask_username(linuxdo_account.username)}): {e}")
                     results.append((account_label, False, {"error": str(e)}))
-                if authentication_succeeded:
-                    break
 
         if not results:
             print(f"❌ {self.account_name}: No valid authentication method found in configuration")
