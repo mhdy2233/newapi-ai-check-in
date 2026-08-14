@@ -5,10 +5,62 @@
 
 import json
 import os
+import re
 from datetime import datetime
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from curl_cffi import requests as curl_requests
+
+
+SENSITIVE_KEY_PATTERN = re.compile(
+    r"(authorization|access[_-]?token|api[_-]?key|code|cookie|password|passwd|secret|session|state|token)",
+    re.IGNORECASE,
+)
+
+
+def _debug_enabled() -> bool:
+    return os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+
+
+def _redact_debug_value(value):
+    """递归脱敏调试响应中的凭据字段，避免日志变成凭据副本。"""
+    if isinstance(value, dict):
+        return {
+            key: "***REDACTED***" if SENSITIVE_KEY_PATTERN.search(str(key)) else _redact_debug_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_debug_value(item) for item in value]
+    return value
+
+
+def _redact_debug_url(url: str) -> str:
+    """保留调试 URL 结构，但隐藏 OAuth code/state 等敏感查询参数。"""
+    parsed = urlparse(url)
+    query = [
+        (key, "***REDACTED***" if SENSITIVE_KEY_PATTERN.search(key) else value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+    ]
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _save_debug_response(response: curl_requests.Response, context: str, account_name: str, body):
+    safe_account_name = "".join(c if c.isalnum() else "_" for c in account_name)
+    safe_context = "".join(c if c.isalnum() else "_" for c in context)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    logs_dir = "logs"
+    os.makedirs(logs_dir, exist_ok=True)
+    filepath = os.path.join(logs_dir, f"{safe_account_name}_{timestamp}_{safe_context}_response.json")
+    debug_record = {
+        "context": context,
+        "status_code": response.status_code,
+        "url": _redact_debug_url(response.url),
+        "content_type": response.headers.get("content-type", ""),
+        "body": _redact_debug_value(body),
+    }
+    with open(filepath, "w", encoding="utf-8") as file:
+        json.dump(debug_record, file, ensure_ascii=False, indent=2)
+    print(f"📝 {account_name}: Debug response saved to: {filepath}")
 
 
 def proxy_resolve(proxy_config: dict | None = None) -> str | None:
@@ -63,7 +115,10 @@ def response_resolve(
     os.makedirs(logs_dir, exist_ok=True)
 
     try:
-        return response.json()
+        json_data = response.json()
+        if _debug_enabled():
+            _save_debug_response(response, context, account_name, json_data)
+        return json_data
     except json.JSONDecodeError as e:
         print(f"❌ {account_name}: Failed to parse JSON response: {e}")
 
