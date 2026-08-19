@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       accounts:
-        description: '账号配置 (JSON 格式，可选，不填则使用 secrets.ACCOUNTS)'
+        description: '账号配置 (JSON 格式，可选，不填则使用 secrets.ACCOUNTS 及 ACCOUNTS_数字)'
         required: false
         type: string
         default: ''
@@ -106,6 +106,16 @@ jobs:
     - name: 执行签到
       env:
         ACCOUNTS: ${{ inputs.accounts || secrets.ACCOUNTS }}
+        ACCOUNTS_1: ${{ secrets.ACCOUNTS_1 }}
+        ACCOUNTS_2: ${{ secrets.ACCOUNTS_2 }}
+        ACCOUNTS_3: ${{ secrets.ACCOUNTS_3 }}
+        ACCOUNTS_4: ${{ secrets.ACCOUNTS_4 }}
+        ACCOUNTS_5: ${{ secrets.ACCOUNTS_5 }}
+        ACCOUNTS_6: ${{ secrets.ACCOUNTS_6 }}
+        ACCOUNTS_7: ${{ secrets.ACCOUNTS_7 }}
+        ACCOUNTS_8: ${{ secrets.ACCOUNTS_8 }}
+        ACCOUNTS_9: ${{ secrets.ACCOUNTS_9 }}
+        ACCOUNTS_10: ${{ secrets.ACCOUNTS_10 }}
         ACCOUNTS_LINUX_DO: ${{ secrets.ACCOUNTS_LINUX_DO }}
         ACCOUNTS_GITHUB: ${{ secrets.ACCOUNTS_GITHUB }}
         PROVIDERS: ${{ inputs.providers || secrets.PROVIDERS }}

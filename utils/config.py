@@ -378,7 +378,7 @@ class AppConfig:
 
         Args:
             providers_env: 自定义 providers 配置的环境变量名称，默认为 "PROVIDERS"
-            accounts_env: 账号配置的环境变量名称，默认为 "ACCOUNTS"
+            accounts_env: 账号配置的基础环境变量名称，默认为 "ACCOUNTS"，同时加载其数字后缀变量
             linux_do_accounts_env: Linux.do 账号配置的环境变量名称，默认为 "ACCOUNTS_LINUX_DO"
             github_accounts_env: GitHub 账号配置的环境变量名称，默认为 "ACCOUNTS_GITHUB"
             proxy_env: 全局代理配置的环境变量名称，默认为 "PROXY"
@@ -1001,39 +1001,67 @@ class AppConfig:
         """从环境变量加载多账号配置
 
         Args:
-            accounts_env: 环境变量名称或直接的 JSON 字符串值
-                         优先尝试作为环境变量名获取，获取不到则作为值使用
+            accounts_env: 账号配置的基础环境变量名称，同时加载其数字后缀变量
             global_linux_do_accounts: 全局 Linux.do 账号列表
             global_github_accounts: 全局 GitHub 账号列表
 
         Returns:
             账号配置列表，如果加载失败则返回空列表
         """
-        # 从环境变量获取账号配置
-        accounts_str = os.getenv(accounts_env)
+        # 除了基础环境变量外，也加载 ACCOUNTS_1、ACCOUNTS_2 ... 这类变量。
+        # 仅匹配数字后缀，避免把 ACCOUNTS_LINUX_DO、ACCOUNTS_GITHUB 当成账号配置。
+        account_env_names = [accounts_env]
+        numbered_env_names = []
+        numbered_prefix = f"{accounts_env}_"
+        for env_name in os.environ:
+            if not env_name.startswith(numbered_prefix):
+                continue
 
-        if not accounts_str:
+            suffix = env_name[len(numbered_prefix) :]
+            if suffix.isdigit():
+                numbered_env_names.append((int(suffix), env_name))
+
+        account_env_names.extend(env_name for _, env_name in sorted(numbered_env_names))
+
+        # 每个环境变量都可以是一个账号对象或账号数组，解析失败时只跳过当前变量，
+        # 避免新增的错误配置导致原有 ACCOUNTS 账号全部无法加载。
+        account_entries = []
+        found_accounts_env = False
+        for env_name in account_env_names:
+            accounts_str = os.getenv(env_name)
+            if not accounts_str:
+                continue
+
+            found_accounts_env = True
+            try:
+                accounts_data = json.loads(accounts_str)
+            except json.JSONDecodeError as e:
+                print(f"❌ Failed to parse {env_name}: {e}")
+                continue
+
+            if isinstance(accounts_data, dict):
+                accounts_data = [accounts_data]
+            elif not isinstance(accounts_data, list):
+                print(f"❌ {env_name} must use a JSON object or array format")
+                continue
+
+            account_entries.extend((env_name, account) for account in accounts_data)
+
+        if not found_accounts_env:
             print(f"⚠️ {accounts_env} environment variable not found")
             return []
 
-        try:
-            accounts_data = json.loads(accounts_str)
-
-            # 检查是否为数组格式
-            if not isinstance(accounts_data, list):
-                print("❌ Account configuration must use array format [{}]")
-                return []
-
-            accounts = []
-            # 验证账号数据格式
-            for i, account in enumerate(accounts_data):
+        accounts = []
+        # 验证账号数据格式
+        for i, (env_name, account) in enumerate(account_entries):
+            try:
                 if not isinstance(account, dict):
-                    print(f"⚠️ Account {i + 1} configuration format is incorrect, skipping")
+                    print(f"⚠️ {env_name} account {i + 1} configuration format is incorrect, skipping")
                     continue
 
                 # 如果有 name 字段,确保它不是空字符串
                 if "name" in account and not account["name"]:
-                    print(f"⚠️ Account {i + 1} name field cannot be empty, skipping")
+                    print(f"⚠️ {env_name} account {i + 1} name field cannot be empty, skipping")
                     continue
 
                 account_name = account.get("name") or f"Account {i + 1}"
@@ -1120,14 +1148,11 @@ class AppConfig:
                     account, linux_do_accounts, github_accounts, site_accounts
                 )
                 accounts.append(account_config)
+            except Exception as e:
+                print(f"❌ {env_name} account configuration format is incorrect: {e}")
+                continue
 
-            return accounts
-        except json.JSONDecodeError as e:
-            print(f"❌ Account configuration JSON format is incorrect: {e}")
-            return []
-        except Exception as e:
-            print(f"❌ Account configuration format is incorrect: {e}")
-            return []
+        return accounts
 
     def get_provider(self, name: str) -> ProviderConfig | None:
         """获取指定 provider 配置"""

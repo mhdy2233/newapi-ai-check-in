@@ -38,6 +38,10 @@ Affs:
    - Name: `ACCOUNTS`
    - Value: 你的多账号配置数据
 
+账号较多时，也可以拆分到 `ACCOUNTS_1`、`ACCOUNTS_2` 等 secret 中，程序会按数字顺序加载并合并所有配置。每个 secret 的 Value 可以是单个账号对象，也可以是账号数组；也可以只配置编号形式而不配置 `ACCOUNTS`。
+
+GitHub Actions workflow 已预先注入 `ACCOUNTS_1` 到 `ACCOUNTS_10`。如果使用更大的编号，请同时在 `.github/workflows/checkin.yml` 的执行步骤中增加对应的 secret 映射。
+
 #### 2.0 快速生成 JSON（推荐）
 
 仓库根目录提供了一个纯 HTML 生成器：`secret-json-generator.html`。
