@@ -59,6 +59,8 @@ GitHub Actions workflow 已预先注入 `ACCOUNTS_1` 到 `ACCOUNTS_10`。如果�
 - 生成器只在浏览器本地运行，不会上传你的账号或密码。
 - `ACCOUNTS_LINUX_DO` 与 `ACCOUNTS_GITHUB` 使用相同 JSON 数组格式（`[{"username":"...","password":"..."}]`）。
 
+手动运行 Actions 时可以开启 `debug` 调试模式。开启后，程序会通过已配置的通知渠道发送原始的 `ACCOUNTS`、`ACCOUNTS_1` 等配置，便于排查 Secret 加载问题；其中可能包含密码、Cookie 和 Token，请仅在必要时使用。
+
 #### 2.1 全局 OAuth 账号配置（可选）
 
 可以配置全局的 Linux.do 和 GitHub 账号，供多个 provider 共享使用。

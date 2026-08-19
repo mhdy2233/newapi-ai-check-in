@@ -108,15 +108,23 @@ class NotificationKit:
 		data = {'msgtype': 'text', 'text': {'content': f'{title}\n{content}'}}
 		curl_requests.post(self.weixin_webhook, json=data, timeout=30)
 
-	def send_telegram(self, title: str, content: str):
+	def send_telegram(self, title: str, content: str, parse_mode: str | None = 'Markdown'):
 		if not self.telegram_bot_token or not self.telegram_chat_id:
 			raise ValueError('Telegram Bot Token or Chat ID not configured')
 
-		text = f'*{title}*\n{content}'
-		data = {'chat_id': self.telegram_chat_id, 'text': text, 'parse_mode': 'Markdown'}
+		text = f'*{title}*\n{content}' if parse_mode else f'{title}\n{content}'
+		data = {'chat_id': self.telegram_chat_id, 'text': text}
+		if parse_mode:
+			data['parse_mode'] = parse_mode
 		curl_requests.post(f'https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage', json=data, timeout=30)
 
-	def push_message(self, title: str, content: str, msg_type: Literal['text', 'html'] = 'text'):
+	def push_message(
+		self,
+		title: str,
+		content: str,
+		msg_type: Literal['text', 'html'] = 'text',
+		telegram_parse_mode: str | None = 'Markdown',
+	):
 		notifications = [
 			('Email', lambda: self.send_email(title, content, msg_type)),
 			('PushPlus', lambda: self.send_pushplus(title, content)),
@@ -124,7 +132,7 @@ class NotificationKit:
 			('DingTalk', lambda: self.send_dingtalk(title, content)),
 			('Feishu', lambda: self.send_feishu(title, content)),
 			('WeChat Work', lambda: self.send_wecom(title, content)),
-			('Telegram', lambda: self.send_telegram(title, content)),
+			('Telegram', lambda: self.send_telegram(title, content, telegram_parse_mode)),
 		]
 
 		for name, func in notifications:

@@ -6,6 +6,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime
 from dotenv import load_dotenv
@@ -17,6 +18,59 @@ from checkin import CheckIn
 load_dotenv(override=True)
 
 BALANCE_HASH_FILE = "balance_hash.txt"
+DEBUG_ACCOUNTS_CHUNK_SIZE = 1500
+
+
+def is_debug_enabled() -> bool:
+    """判断是否开启调试模式。"""
+    return os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+
+
+def get_accounts_env_names() -> list[str]:
+    """获取 ACCOUNTS 及其数字后缀环境变量名，并按加载顺序排列。"""
+    numbered_env_names = []
+    numbered_prefix = "ACCOUNTS_"
+
+    for env_name in os.environ:
+        if not env_name.startswith(numbered_prefix):
+            continue
+
+        suffix = env_name[len(numbered_prefix):]
+        if suffix.isdigit():
+            numbered_env_names.append((int(suffix), env_name))
+
+    numbered_env_names.sort()
+    return ["ACCOUNTS", *(env_name for _, env_name in numbered_env_names)]
+
+
+def get_accounts_debug_payload() -> str:
+    """导出调试时实际注入的 ACCOUNTS 环境变量原文。"""
+    sections = []
+    for env_name in get_accounts_env_names():
+        value = os.getenv(env_name)
+        if value:
+            sections.append(f"===== {env_name} =====\n{value}")
+
+    if not sections:
+        return "未找到 ACCOUNTS 或 ACCOUNTS_数字环境变量。"
+
+    return "\n\n".join(sections)
+
+
+def split_debug_payload(payload: str, chunk_size: int = DEBUG_ACCOUNTS_CHUNK_SIZE) -> list[str]:
+    """按通知渠道的常见长度限制切分调试内容，避免完整配置被截断。"""
+    return [payload[index:index + chunk_size] for index in range(0, len(payload), chunk_size)] or [""]
+
+
+def send_debug_accounts() -> None:
+    """在调试模式下通过已有通知渠道发送原始 ACCOUNTS 配置。"""
+    payload = get_accounts_debug_payload()
+    chunks = split_debug_payload(payload)
+    print(f"🐞 DEBUG: sending ACCOUNTS payload via notification ({len(chunks)} message(s))")
+
+    for index, chunk in enumerate(chunks, start=1):
+        title = "DEBUG ACCOUNTS" if len(chunks) == 1 else f"DEBUG ACCOUNTS ({index}/{len(chunks)})"
+        notify.push_message(title, chunk, msg_type="text", telegram_parse_mode=None)
 
 
 def generate_balance_hash(balances: dict) -> str:
@@ -46,6 +100,9 @@ async def main():
 
     app_config = AppConfig.load_from_env()
     print(f"⚙️ Loaded {len(app_config.providers)} provider(s)")
+
+    if is_debug_enabled():
+        send_debug_accounts()
 
     # 检查账号配置
     if not app_config.accounts:

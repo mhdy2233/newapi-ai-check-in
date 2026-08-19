@@ -15,7 +15,7 @@ on:
         type: string
         default: ''
       debug:
-        description: '调试模式 (启用后会保存截图和 HTML 日志)'
+        description: '调试模式 (保存截图/HTML，并通过通知发送原始 ACCOUNTS；请谨慎使用)'
         required: false
         type: boolean
 
