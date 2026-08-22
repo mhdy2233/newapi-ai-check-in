@@ -11,7 +11,7 @@ Affs:
 - [HotaruApi](https://hotaruapi.com/register?aff=q6xq)
 - [Elysiver](https://elysiver.h-e.top/register?aff=5JsA)
 
-其它使用 `newapi.ai` 功能相似, 可自定义环境变量 `PROVIDERS` 支持或 `PR` 到仓库。
+其它使用 `newapi.ai` 功能相似, 可通过 `PROVIDERS` 或 `PROVIDERS_数字` 自定义配置，或 `PR` 到仓库。
 
 ## 功能特性
 
@@ -224,6 +224,10 @@ GitHub Actions workflow 已预先注入 `ACCOUNTS_1` 到 `ACCOUNTS_10`。如果�
    - Name: `PROVIDERS`
    - Value: 供应商
    - 说明: 自定义 provider 默认不会自动添加到账号中；只有配置 `"auto_add": true`，且账号配置中没有使用该 provider 时，才会自动添加执行（详见 [PROVIDERS.json](./PROVIDERS.json)）。
+
+Provider 较多时，也可以拆分到 `PROVIDERS_1`、`PROVIDERS_2` 等 secret 中，程序会按数字顺序加载并合并所有配置；同名 provider 以后加载的配置为准。每个 secret 的 Value 都应是 provider 名称到配置的 JSON 对象，也可以只配置编号形式而不配置 `PROVIDERS`。
+
+GitHub Actions workflow 已预先注入 `PROVIDERS_1` 到 `PROVIDERS_10`。如果使用更大的编号，请同时在 `.github/workflows/checkin.yml` 的执行步骤中增加对应的 secret 映射。
 
 
 #### 3.5 代理配置

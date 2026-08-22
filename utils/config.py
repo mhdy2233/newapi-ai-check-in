@@ -377,7 +377,7 @@ class AppConfig:
         """从环境变量加载配置
 
         Args:
-            providers_env: 自定义 providers 配置的环境变量名称，默认为 "PROVIDERS"
+            providers_env: 自定义 providers 配置的基础环境变量名称，默认为 "PROVIDERS"，同时加载其数字后缀变量
             accounts_env: 账号配置的基础环境变量名称，默认为 "ACCOUNTS"，同时加载其数字后缀变量
             linux_do_accounts_env: Linux.do 账号配置的环境变量名称，默认为 "ACCOUNTS_LINUX_DO"
             github_accounts_env: GitHub 账号配置的环境变量名称，默认为 "ACCOUNTS_GITHUB"
@@ -510,7 +510,7 @@ class AppConfig:
         """从环境变量加载 providers 配置
 
         Args:
-            providers_env: 环境变量名称
+            providers_env: providers 配置的基础环境变量名称，同时加载其数字后缀变量
 
         Returns:
             providers 配置字典
@@ -839,31 +839,56 @@ class AppConfig:
             ),
         }
 
-        # 尝试从环境变量加载自定义 providers
-        providers_str = os.getenv(providers_env)
+        # 除了基础环境变量外，也加载 PROVIDERS_1、PROVIDERS_2 ... 这类变量。
+        # 仅匹配数字后缀，避免把 PROVIDERS_OTHER 等变量当成 provider 配置。
+        provider_env_names = [providers_env]
+        numbered_env_names = []
+        numbered_prefix = f"{providers_env}_"
+        for env_name in os.environ:
+            if not env_name.startswith(numbered_prefix):
+                continue
 
-        if providers_str:
+            suffix = env_name[len(numbered_prefix) :]
+            if suffix.isdigit():
+                numbered_env_names.append((int(suffix), env_name))
+
+        provider_env_names.extend(env_name for _, env_name in sorted(numbered_env_names))
+
+        # 每个环境变量都必须是 provider 名称到配置的 JSON 对象。
+        # 解析失败时只跳过当前变量，避免新增的错误配置影响其它 provider。
+        found_providers_env = False
+        loaded_provider_count = 0
+        for env_name in provider_env_names:
+            providers_str = os.getenv(env_name)
+            if not providers_str:
+                continue
+
+            found_providers_env = True
             try:
                 providers_data = json.loads(providers_str)
-
-                if not isinstance(providers_data, dict):
-                    print(f"⚠️ {providers_env} must be a JSON object, ignoring custom providers")
-                    return providers
-
-                # 解析自定义 providers,会覆盖默认配置
-                for name, provider_data in providers_data.items():
-                    try:
-                        providers[name] = ProviderConfig.from_dict(name, provider_data, is_customize=True)
-                    except Exception as e:
-                        print(f'⚠️ Failed to parse provider "{name}": {e}, skipping')
-                        continue
-
-                print(f"ℹ️ Loaded {len(providers_data)} custom provider(s) from {providers_env} environment variable")
             except json.JSONDecodeError as e:
-                print(f"⚠️ Failed to parse {providers_env} environment variable: {e}, using default configuration only")
-            except Exception as e:
-                print(f"⚠️ Error loading {providers_env}: {e}, using default configuration only")
-        else:
+                print(f"⚠️ Failed to parse {env_name} environment variable: {e}, skipping")
+                continue
+
+            if not isinstance(providers_data, dict):
+                print(f"⚠️ {env_name} must be a JSON object, skipping custom providers")
+                continue
+
+            # 按环境变量顺序解析自定义 providers，后加载的同名配置会覆盖先加载的配置。
+            for name, provider_data in providers_data.items():
+                try:
+                    providers[name] = ProviderConfig.from_dict(name, provider_data, is_customize=True)
+                    loaded_provider_count += 1
+                except Exception as e:
+                    print(f'⚠️ Failed to parse provider "{name}" from {env_name}: {e}, skipping')
+                    continue
+
+        if loaded_provider_count:
+            print(
+                f"ℹ️ Loaded {loaded_provider_count} custom provider(s) from {providers_env}"
+                " environment variable(s)"
+            )
+        elif not found_providers_env:
             print(f"⚠️ {providers_env} environment variable not found, using default configuration only")
 
         return providers
